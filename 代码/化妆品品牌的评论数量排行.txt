@@ -1,0 +1,105 @@
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Mapper;
+
+import java.io.IOException;
+
+public class BrandMapper extends Mapper<LongWritable, Text,Text, IntWritable> {
+    Text outK = new Text();
+    IntWritable outV = new IntWritable(1);
+
+    @Override
+    protected void map(LongWritable key, Text value, Mapper<LongWritable, Text, Text, IntWritable>.Context context) throws IOException, InterruptedException {
+        String line = value.toString();
+        if(!line.contains("省份")){//跳过表头
+            String[] split = line.split(",");
+            if(split.length>=40){
+                if((split[39].equals("男性")||split[39].equals("女性"))&&split[8]!=null&&split[8]!=""&&split[8]!=" "){
+                    outK.set(split[39]+split[8]);//把性别和车品牌当成key输出到reduce
+                    context.write(outK,outV);
+                }
+
+            }
+        }
+    }
+}
+
+package MR3.task21_2;
+
+
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Reducer;
+
+import java.io.IOException;
+
+public class BrandReducer extends Reducer<Text, IntWritable,Text, LongWritable> {
+    LongWritable outV = new LongWritable();
+
+    long sum;
+    @Override
+    protected void reduce(Text key, Iterable<IntWritable> values, Reducer<Text, IntWritable, Text, LongWritable>.Context context) throws IOException, InterruptedException {
+        sum =0;
+        for (IntWritable value : values) {
+            sum+=value.get();
+        }
+        outV.set(sum);
+        context.write(key,outV);
+    }
+}
+
+package MR3.task21_2;
+
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+
+import java.io.IOException;
+
+public class BrandDriver {
+    public static void main(String[] args) throws IOException, InterruptedException, ClassNotFoundException {
+        // 1、获取配置信息以及封装任务(获取job)
+        Configuration conf = new Configuration();
+        FileSystem fs = FileSystem.get(conf);
+        Job job = Job.getInstance();  // 获取一个实例
+
+        // 2、指定Driver类程序jar所在的路径
+        job.setJarByClass(BrandDriver.class);
+
+        // 3、指定Mapper和Reducer
+        job.setMapperClass(BrandMapper.class);
+        job.setReducerClass(BrandReducer.class);
+
+        // 4、指定Mapper端的输出类型(key value)
+        job.setMapOutputKeyClass(Text.class);
+        job.setMapOutputValueClass(IntWritable.class);
+
+        // 5、指定最终的结果输出类型
+        job.setOutputKeyClass(Text.class);
+        job.setOutputValueClass(LongWritable.class);
+
+
+        // 6、指定输入文件和输出文件的路径
+         FileInputFormat.addInputPath(job, new Path("D:\\homework\\hadoop_work\\Cars.csv"));
+        FileOutputFormat.setOutputPath(job, new Path("D:\\homework\\hadoop_work\\caroutput"));
+        if (exists){
+            fs.delete(new Path("E:\\TestData\\MR3\\output22"),true);
+
+        }
+
+        FileOutputFormat.setOutputPath(job, new Path("E:\\TestData\\MR3\\output22"));
+
+        // 7、提交任务执行代码 result为真就为0，为假就为1 0正常退出  1 异常退出
+        boolean b = job.waitForCompletion(true);
+        System.exit(b ? 0 : 1);
+    }
+}
